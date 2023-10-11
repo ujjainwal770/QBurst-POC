@@ -3,7 +3,7 @@ trigger:
 
 variables:
   buildConfiguration: 'Release'
-  releaseBranchName: 'main'
+  releaseBranchName: 'release'
 
 stages:
 - stage: 'Build'
@@ -86,7 +86,7 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'your-subscription'
+              azureSubscription: 'Free Trial(c2866b51-0982-4501-9733-32b999ea5577)'
               appType: 'webAppLinux'
               appName: '$(WebAppNameDev)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
@@ -110,7 +110,7 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'your-subscription'
+              azureSubscription: 'Free Trial(c2866b51-0982-4501-9733-32b999ea5577)'
               appType: 'webAppLinux'
-              appName: '$(WebAppNameDev)'
+              appName: 'tailspin-space-game-web-staging-11740'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
