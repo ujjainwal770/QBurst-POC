@@ -1,5 +1,10 @@
 trigger:
-- '*'
+  branches:
+    exclude:
+      - '*'
+  - pr
+  - prSourceBranch:
+    - release
 
 variables:
   buildConfiguration: 'Release'
@@ -8,17 +13,13 @@ variables:
 stages:
 - stage: 'Build'
   displayName: 'Build the web application'
-  jobs: 
+  jobs:
   - job: 'Build'
     displayName: 'Build job'
     pool:
-      vmImage: 'ubuntu-20.04'
+      vmImage: 'ubuntu-latest'  # Use the latest version of Ubuntu
       demands:
       - npm
-
-    variables:
-      wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
-      dotnetSdkVersion: '6.x'
 
     steps:
     - task: UseDotNet@2
@@ -31,52 +32,51 @@ stages:
       inputs:
         verbose: false
 
-    - script: './node_modules/.bin/node-sass $(wwwrootDir) --output $(wwwrootDir)'
+    - script: 'npm install -g node-sass'  # Install node-sass globally
+      displayName: 'Install node-sass'
+
+    - script: 'node-sass $(wwwrootDir) --output $(wwwrootDir)'  # Use global node-sass
       displayName: 'Compile Sass assets'
 
-    - task: gulp@1
+    - script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > $(wwwrootDir)/buildinfo.txt'
+      displayName: 'Write build info'
+
+    - script: 'npm install -g gulp'  # Install gulp globally
+      displayName: 'Install gulp'
+
+    - script: 'gulp'  # Run gulp tasks
       displayName: 'Run gulp tasks'
 
-    - script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt'
-      displayName: 'Write build info'
-      workingDirectory: $(wwwrootDir)
+    - script: 'npm install'  # Install project dependencies
+      displayName: 'Install project dependencies'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Restore project dependencies'
-      inputs:
-        command: 'restore'
-        projects: '**/*.csproj'
-
-    - task: DotNetCoreCLI@2
+    - script: 'npm run build -- --configuration $(buildConfiguration)'  # Build the project
       displayName: 'Build the project - $(buildConfiguration)'
-      inputs:
-        command: 'build'
-        arguments: '--no-restore --configuration $(buildConfiguration)'
-        projects: '**/*.csproj'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish the project - $(buildConfiguration)'
-      inputs:
-        command: 'publish'
-        projects: '**/*.csproj'
-        publishWebProjects: false
-        arguments: '--no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)'
-        zipAfterPublish: true
+    - script: 'npm run build'  # Build the project
+      displayName: 'Build the project - $(buildConfiguration)'
 
-    - publish: '$(Build.ArtifactStagingDirectory)'
+    - task: ArchiveFiles@2
+      displayName: 'Archive build artifacts'
+      inputs:
+        rootFolderOrFile: '$(Build.SourcesDirectory)/$(wwwrootDir)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(buildConfiguration)/build-artifact.zip'
+    
+    - publish: $(Build.ArtifactStagingDirectory)/$(buildConfiguration)/build-artifact.zip
       artifact: drop
 
 - stage: 'Dev'
   displayName: 'Deploy to the dev environment'
   dependsOn: Build
-  condition:  succeeded()
+  condition: succeeded()
   jobs:
   - deployment: Deploy
+    displayName: 'Deploy'
     pool:
-      vmImage: 'ubuntu-20.04'
+      vmImage: 'ubuntu-latest'  # Use the latest version of Ubuntu
     environment: dev
-    variables:
-    - group: Release
     strategy:
       runOnce:
         deploy:
@@ -89,18 +89,17 @@ stages:
               azureSubscription: 'Free Trial(c2866b51-0982-4501-9733-32b999ea5577)'
               appType: 'webAppLinux'
               appName: '$(WebAppNameDev)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/build-artifact.zip'
 
 - stage: 'Staging'
   displayName: 'Deploy to the staging environment'
   dependsOn: Dev
   jobs:
   - deployment: Deploy
+    displayName: 'Deploy'
     pool:
-      vmImage: 'ubuntu-20.04'
+      vmImage: 'ubuntu-latest'  # Use the latest version of Ubuntu
     environment: staging
-    variables:
-    - group: 'Release'
     strategy:
       runOnce:
         deploy:
@@ -113,4 +112,4 @@ stages:
               azureSubscription: 'Free Trial(c2866b51-0982-4501-9733-32b999ea5577)'
               appType: 'webAppLinux'
               appName: 'tailspin-space-game-web-staging-11740'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/build-artifact.zip'
